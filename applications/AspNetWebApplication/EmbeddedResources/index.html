@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<table id="main-table">
+    <tr class="tr-td-class">
+        <td>
+            <div>
+                <button onclick="DeleteImagesAndReloadPage()">
+                    delete images
+                </button>
+            </div>
+        </td>
+    </tr>
+</table>
+
+</body>
+
+<script>
+const WEB_SERVICE_SERVER_URL = window.location.href
+const ADD_IMAGE_ICON_SRC = 'images/add-icon';
+const START_IMAGE_ICON_SRC = 'images/start-icon';
+const CANCEL_IMAGE_ICON_SRC = 'images/cancel-icon';
+const IMAGES_COMPARSION_POLLING_INTERVAL = 30;
+
+
+function BuildButtonInDiv(
+    buttonId, buttonClass, onclick,
+    imgSrc = null, divClass = null) {
+
+    var buttonElement = document.createElement('button');
+    buttonElement.onclick = onclick;
+    buttonElement.id = buttonId;
+    buttonElement.className = buttonClass;
+
+    if (imgSrc != null) {
+        var imgElement = document.createElement('img')
+        imgElement.src = imgSrc;
+        buttonElement.appendChild(imgElement);
+    }
+
+    var divElement = document.createElement('div');
+    divElement.appendChild(buttonElement);
+
+    if (divClass != null) {
+        divElement.className = divClass;
+    }
+    return divElement;
+}
+
+function WrapInSomeElement(elementName, wrappingElement) {
+    var tdElement = document.createElement(elementName);
+    tdElement.appendChild(wrappingElement);
+    return tdElement;
+}
+
+function BuildImageInDiv(divClass, divId, imgSrc) {
+    var imgElement = document.createElement('img');
+    imgElement.src = imgSrc;
+    var divElement = WrapInSomeElement('div', imgElement);
+    divElement.className = divClass;
+    divElement.id = divId;
+    return divElement;
+}
+
+function BuildRowAddImageButtonElement() {
+    return BuildButtonInDiv(
+        'add-new-row-image', 'new-image-row-button-class',
+        AddNewRowImage, ADD_IMAGE_ICON_SRC,
+        'row-table-element');
+}
+
+function BuildColumnAddImageButtonElement() {
+    return BuildButtonInDiv(
+        'add-new-column-image', 'new-image-column-button-class',
+        AddNewColumnImage, ADD_IMAGE_ICON_SRC,
+        'column-table-element');
+}
+
+function BuildInitialInnerTableElement(firstImageId, secondImageId) {
+    var elementId = firstImageId + '-' + secondImageId;
+    var enclosedFunction = () => {
+        FillDistanceAndSimilarityData(firstImageId, secondImageId, 'td-' + elementId);
+    }
+    var divElement = BuildButtonInDiv(
+        elementId, 'inner-table-element-start-button-class', enclosedFunction,
+        START_IMAGE_ICON_SRC, 'inner-table-element');
+    divElement.id = elementId;
+    return divElement;
+}
+
+function BuildInnerTableElementWithDistanceAndSimilarity(elementId, distance, similarity) {
+    var distanceTitleElement = document.createElement('td');
+    distanceTitleElement.innerText = 'Distance: ' + parseFloat(distance).toPrecision(4);
+    distanceTitleElement = WrapInSomeElement('tr', distanceTitleElement);
+
+    var similarityTitleElement = document.createElement('td');
+    similarityTitleElement.innerText = 'Similarity: ' + parseFloat(similarity).toPrecision(4);
+    similarityTitleElement = WrapInSomeElement('tr', similarityTitleElement);
+
+    var tableElement = WrapInSomeElement('table', distanceTitleElement);
+    tableElement.className = 'distance-and-similarity-table-class';
+    tableElement.appendChild(similarityTitleElement);
+
+    var divTableElement = WrapInSomeElement('div', tableElement);
+    divTableElement.className = 'inner-table-element';
+    divTableElement.id = elementId;
+    return divTableElement;
+}
+
+function ClickOnStartImageInLine(element) {
+    var innerTableElement = element.childNodes[0];
+    var button = innerTableElement.childNodes[0];
+    button.click();
+}
+
+function ClickOnCancelImageInLine(element) {
+    var innerTableElement =
+        element.childNodes[0].childNodes[0].childNodes[0].childNodes[0];
+    var divHolderElement = innerTableElement.childNodes[0];
+    var button = divHolderElement.childNodes[0];
+    button.click();
+}
+
+function BuildRowTableElementWithImage(imageId, imageSrc) {
+    var imgElement = BuildImageInDiv('uploaded-image-class', imageId, imageSrc);
+    imgElement = WrapInSomeElement('td', imgElement);
+    imgElement.colSpan = 2;
+    imgElement = WrapInSomeElement('tr', imgElement);
+
+    var startButtonElement = BuildButtonInDiv(
+        'start-row-image-' + imageId, 'button-class',
+        () => {
+            PerformOperationForImageFromTableRow(
+                'td-' + imageId, ClickOnStartImageInLine);
+        }, START_IMAGE_ICON_SRC);
+    startButtonElement = WrapInSomeElement('td', startButtonElement);
+
+    var cancelButtonElement = BuildButtonInDiv(
+        'cancel-row-image-' + imageId, 'button-class',
+        () => {
+            PerformOperationForImageFromTableRow(
+                'td-' + imageId, ClickOnCancelImageInLine);
+        }, CANCEL_IMAGE_ICON_SRC);
+    cancelButtonElement = WrapInSomeElement('td', cancelButtonElement);
+
+    var bottomElement = WrapInSomeElement('tr', startButtonElement);
+    bottomElement.appendChild(cancelButtonElement);
+
+    var tbodyElement = WrapInSomeElement('tbody', imgElement);
+    tbodyElement.appendChild(bottomElement);
+
+    var tableElement = WrapInSomeElement('table', tbodyElement);
+    var resultDivElement = WrapInSomeElement('div', tableElement);
+    resultDivElement.id = imageId;
+    resultDivElement.className = 'row-table-element';
+
+    return resultDivElement;
+}
+
+function BuildColumnTableElementWithImage(imageId, imageSrc) {
+    var imgElement = BuildImageInDiv('uploaded-image-class', imageId, imageSrc);
+    imgElement = WrapInSomeElement('td', imgElement);
+    imgElement.rowSpan = 2;
+
+    var startButtonElement = BuildButtonInDiv(
+        'start-column-image-' + imageId, 'button-class',
+        () => {
+            PerformOperationForImageFromTableColumn(
+                'td-' + imageId, ClickOnStartImageInLine);
+        }, START_IMAGE_ICON_SRC);
+    startButtonElement = WrapInSomeElement('td', startButtonElement);
+
+    var topElement = WrapInSomeElement('tr', imgElement);
+    topElement.appendChild(startButtonElement);
+
+    var cancelButtonElement = BuildButtonInDiv(
+        'remove-column-image-' + imageId, 'button-class',
+        () => {
+            PerformOperationForImageFromTableColumn(
+                'td-' + imageId, ClickOnCancelImageInLine);
+        }, CANCEL_IMAGE_ICON_SRC);
+    cancelButtonElement = WrapInSomeElement('td', cancelButtonElement);
+    cancelButtonElement.rowSpan = 2;
+    cancelButtonElement = WrapInSomeElement('tr', cancelButtonElement);
+
+    var tbodyElement = WrapInSomeElement('tbody', topElement);
+    tbodyElement.appendChild(cancelButtonElement);
+
+    var tableElement = WrapInSomeElement('table', tbodyElement);
+    var resultDivElement = WrapInSomeElement('div', tableElement);
+    resultDivElement.id = imageId;
+    resultDivElement.className = 'column-table-element';
+    return resultDivElement;
+}
+
+function BuildTdTableInnerElement(divElement) {
+    var newTableElement = WrapInSomeElement('td', divElement);
+    newTableElement.className = 'tr-td-class';
+    newTableElement.id = 'td-' + divElement.id;
+    return newTableElement;
+}
+
+function AddNewColumnInTable(tableName, columnElements) {
+    var tableRows = document.getElementById(tableName).rows;
+    for (var i = 0; i < columnElements.length; ++i) {
+        if (i >= tableRows.length) {
+            break;
+        }
+        var tdElement = BuildTdTableInnerElement(columnElements[i]);
+        tableRows[i].appendChild(tdElement);
+    }
+}
+
+function RemoveLastElementFromFirstRow(tableName) {
+    var curFirstRow = document.getElementById(tableName).rows[0].cells;
+    var lastElement = curFirstRow[curFirstRow.length - 1];
+    lastElement.remove();
+}
+
+function AddNewRowInTable(tableName, rowElements) {
+    var table = document.getElementById(tableName);
+    var newRow = document.createElement('tr');
+    for (var i = 0; i < rowElements.length; ++i) {
+        var tdElement = BuildTdTableInnerElement(rowElements[i]);
+        newRow.appendChild(tdElement);
+    }
+    table.appendChild(newRow);
+}
+
+function RemoveLastRowFromTable(tableName) {
+    var curFirstColumn = document.getElementById(tableName).rows;
+    curFirstColumn[curFirstColumn.length - 1].remove();
+}
+
+function IsImageAlreadyInRow(rowImageId) {
+    var firstRow = document.getElementById('main-table').rows[0].cells;
+    for (var i = 0; i < firstRow.length; ++i) {
+        if (firstRow[i].id == 'td-' + rowImageId) {
+            alert('Image is already in row.');
+            return true;
+        }
+    }
+    return false;
+}
+
+function AddNewColumnWithElementsInTable(rowImageId, imageSrc) {
+    if (IsImageAlreadyInRow(rowImageId)) return;
+
+    RemoveLastElementFromFirstRow('main-table');
+    var rows = document.getElementById('main-table').rows;
+    var columnElements = [BuildRowTableElementWithImage(rowImageId, imageSrc)];
+    for (var i = 1; i < rows.length - 1; ++i) {
+        var divWithColumnImageId = rows[i].cells[0].childNodes[0];
+        columnElements.push(BuildInitialInnerTableElement(rowImageId, divWithColumnImageId.id));
+    }
+    AddNewColumnInTable('main-table', columnElements);
+    AddNewColumnInTable('main-table', [BuildRowAddImageButtonElement()]);
+}
+
+function IsImageAlreadyInColumn(columnImageId) {
+    var rows = document.getElementById('main-table').rows
+    for (var i = 0; i < rows.length; ++i) {
+        if (rows[i].cells[0].id == 'td-' + columnImageId) {
+            alert('Image is already in column.');
+            return true;
+        }
+    }
+    return false;
+}
+
+function AddNewRowWithElementsInTable(columnImageId, imageSrc) {
+    if (IsImageAlreadyInColumn(columnImageId)) return;
+
+    RemoveLastRowFromTable('main-table');
+    var firstRow = document.getElementById('main-table').rows[0].cells;
+    var rowElements = [BuildColumnTableElementWithImage(columnImageId, imageSrc)];
+    for (var i = 1; i < firstRow.length - 1; ++i) {
+        var divWithRowImageId = firstRow[i].childNodes[0];
+        rowElements.push(BuildInitialInnerTableElement(divWithRowImageId.id, columnImageId));
+    }
+    AddNewRowInTable('main-table', rowElements);
+    AddNewRowInTable('main-table', [BuildColumnAddImageButtonElement()]);
+}
+
+function PerformOperationForImageFromTableRow(tableElementId, clickButtonCallback) {
+    var index = 1;
+    var firstRow = document.getElementById('main-table').rows[0].cells;
+    while (index < firstRow.length - 1) {
+        if (firstRow[index].id == tableElementId) {
+            break;
+        }
+        ++index;
+    }
+
+    var rows = document.getElementById('main-table').rows;
+    for (var i = 1; i < rows.length - 1; ++i) {
+        clickButtonCallback(rows[i].cells[index]);
+    }
+}
+
+function PerformOperationForImageFromTableColumn(tableElementId, clickButtonCallback) {
+    var index = 1;
+    var mainTableRows = document.getElementById('main-table').rows;
+    while (index < mainTableRows.length - 1) {
+        if (mainTableRows[index].cells[0].id == tableElementId) {
+            break;
+        }
+        ++index;
+    }
+
+    var currentRow = document.getElementById('main-table').rows[index].cells;
+    for (var i = 1; i < currentRow.length; ++i) {
+        clickButtonCallback(currentRow[i]);
+    }
+}
+
+function SaveImagePost(image, table_element_type) {
+    var saveImageRequest = new XMLHttpRequest();
+    saveImageRequest.open(
+        "POST", 
+        WEB_SERVICE_SERVER_URL + "images/save?table_element_type=" + table_element_type,
+        false
+    );
+    saveImageRequest.send(image);
+    if (saveImageRequest.status != 200) {
+        console.log(saveImageRequest)
+        return null;
+    }
+    var responseBody = JSON.parse(saveImageRequest.responseText);
+    console.log("Save image finished successfully; image_id: " + responseBody['image_id']);
+    return responseBody['image_id'];
+}
+
+function GetImageAndSaveCommon(table_element_type, callback) {
+    var inputElement = document.createElement('input');
+    inputElement.type = 'file';
+    inputElement.accept = 'image/*';
+    inputElement.onchange = e => { 
+        var file = e.target.files[0];
+        var reader = new FileReader();
+        reader.readAsArrayBuffer(file);
+        reader.onload = readerEvent => {
+            var image = readerEvent.target.result;
+            var imageId = SaveImagePost(image, table_element_type);
+            if (imageId != null) {
+                callback(
+                    imageId, WEB_SERVICE_SERVER_URL + "images/" + imageId);
+            }
+        }
+    }
+    inputElement.click();
+}
+
+function AddNewRowImage() {
+    GetImageAndSaveCommon('ROW', AddNewColumnWithElementsInTable);
+}
+
+function AddNewColumnImage() {
+    GetImageAndSaveCommon('COLUMN', AddNewRowWithElementsInTable);
+}
+
+function RequestStartCalculation(firstImageId, secondImageId) {
+    var startCalculationRequest = new XMLHttpRequest();
+    startCalculationRequest.open(
+        "POST", WEB_SERVICE_SERVER_URL + "images/start_calculation", false);
+    startCalculationRequest.setRequestHeader("Accept", "application/json");
+    startCalculationRequest.setRequestHeader("Content-Type", "application/json");
+    startCalculationRequest.send(
+        JSON.stringify(
+            {
+                "first_image_id": firstImageId,
+                "second_image_id": secondImageId
+            }
+        )
+    );
+    if (startCalculationRequest.status != 200) {
+        console.log(startCalculationRequest)
+        return false;
+    }
+    console.log(
+        "Calculation started; image ids: " +
+        firstImageId + ', ' + secondImageId);
+    return true
+}
+
+function RequestDistanceAndSimilarityWithProgress(firstImageId, secondImageId) {
+    var getDistanceAndSimilarityRequest = new XMLHttpRequest();
+    getDistanceAndSimilarityRequest.open(
+        "POST", WEB_SERVICE_SERVER_URL + "images/compare", false);
+    getDistanceAndSimilarityRequest.setRequestHeader("Accept", "application/json");
+    getDistanceAndSimilarityRequest.setRequestHeader("Content-Type", "application/json");
+    getDistanceAndSimilarityRequest.send(
+        JSON.stringify(
+            {
+                "first_image_id": firstImageId,
+                "second_image_id": secondImageId
+            }
+        )
+    );
+    if (getDistanceAndSimilarityRequest.status != 200) {
+        console.log(getDistanceAndSimilarityRequest)
+        return null;
+    }
+    console.log(
+        "Get distance and similarity; image ids: " +
+        firstImageId + ', ' + secondImageId + '; response: ' + 
+        getDistanceAndSimilarityRequest.responseText);
+    return JSON.parse(getDistanceAndSimilarityRequest.responseText);
+}
+
+function ReplaceInnerTableElement(tdElementId, divElement) {
+    var tableElement = document.getElementById(tdElementId);
+    var currentChild = tableElement.childNodes[0];
+    tableElement.replaceChild(divElement, currentChild);
+}
+
+function CancelSingleCalculation(firstImageId, secondImageId) {
+    var cancelCalculationRequest = new XMLHttpRequest();
+    cancelCalculationRequest.open(
+        "POST", WEB_SERVICE_SERVER_URL + "images/cancel_calculation", false);
+    cancelCalculationRequest.setRequestHeader("Accept", "application/json");
+    cancelCalculationRequest.setRequestHeader("Content-Type", "application/json");
+    cancelCalculationRequest.send(
+        JSON.stringify(
+            {
+                "first_image_id": firstImageId,
+                "second_image_id": secondImageId
+            }
+        )
+    );
+    console.log(cancelCalculationRequest);
+    var progressBarElement =
+        document.getElementById(firstImageId + '-' + secondImageId);
+    progressBarElement.setAttribute('data-calculation-cancelled', 'true');
+}
+
+function BuildProgressBar(elementId, progress) {
+    var progressBar = document.createElement('div');
+    progressBar.className = 'progress-bar-finish-class';
+    progressBar.id = 'progress-bar-' + elementId;
+    progressBar.setAttribute('style', 'width:' + progress.toFixed(0) + '%');
+    return progressBar;
+}
+
+function GetInnerTableProcessingElement(firstImageId, secondImageId) {
+    var elementId = firstImageId + '-' + secondImageId;
+    var buttonElement = BuildButtonInDiv(
+        elementId, 'inner-table-element-cancel-button-class',
+        () => {
+            CancelSingleCalculation(firstImageId, secondImageId);
+        }, CANCEL_IMAGE_ICON_SRC);
+    buttonElement = WrapInSomeElement('td', buttonElement);
+    buttonElement = WrapInSomeElement('tr', buttonElement);
+
+    var progressBar = BuildProgressBar(elementId, 0);
+    progressBar = WrapInSomeElement('div', progressBar);
+    progressBar.className = 'progress-bar-background-class';
+    progressBar = WrapInSomeElement('div', progressBar);
+    progressBar.className = 'progress-bar-holder-class';
+    progressBar = WrapInSomeElement('td', progressBar);
+    progressBar = WrapInSomeElement('tr', progressBar);
+
+    var tableElement = WrapInSomeElement('table', buttonElement);
+    tableElement.appendChild(progressBar);
+
+    var divElement = WrapInSomeElement('div', tableElement);
+    divElement.className = 'inner-table-element';
+    divElement.id = elementId;
+    return divElement;
+}
+
+function UpdateProgressBar(progressBarId, progress) {
+    var progressBarElement = document.getElementById('progress-bar-' + progressBarId);
+    progressBarElement.parentNode.replaceChild(
+        BuildProgressBar(progressBarId, progress * 100), progressBarElement);
+}
+
+function IsCancelledCalculation(progressBarId) {
+    var progressBarElementHolder = document.getElementById(progressBarId);
+    var dataCalculationCancelled =
+        progressBarElementHolder.getAttribute('data-calculation-cancelled');
+    return dataCalculationCancelled == "true";
+}
+
+function Sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function FillDistanceAndSimilarityData(firstImageId, secondImageId, tableElementId) {
+    if (!RequestStartCalculation(firstImageId, secondImageId)) {
+        return;
+    }
+    var distance = 0;
+    var similarity = 0;
+    var elementId = firstImageId + '-' + secondImageId;
+    ReplaceInnerTableElement(
+        tableElementId, GetInnerTableProcessingElement(firstImageId, secondImageId));
+    while (true) {
+        var calculationProgress = 
+            RequestDistanceAndSimilarityWithProgress(firstImageId, secondImageId);
+        if (calculationProgress == null) {
+            console.log("ERROR: compare bad response");
+            ReplaceInnerTableElement(
+                tableElementId, BuildInitialInnerTableElement(firstImageId, secondImageId));
+            return;
+        }
+        if (calculationProgress["distance"] == null || 
+            calculationProgress["similarity"] == null) {
+            if (IsCancelledCalculation(elementId)) {
+                console.log('Calculation was cancelled, id: ' + elementId);
+                ReplaceInnerTableElement(
+                    tableElementId,
+                    BuildInitialInnerTableElement(firstImageId, secondImageId));
+                return;
+            }
+            UpdateProgressBar(elementId, calculationProgress["progress"]);
+            await Sleep(IMAGES_COMPARSION_POLLING_INTERVAL);
+            continue;
+        }
+        distance = calculationProgress["distance"];
+        similarity = calculationProgress["similarity"];
+        break;
+    }
+    var divWithDistanceAndSimilarity = 
+        BuildInnerTableElementWithDistanceAndSimilarity(elementId, distance, similarity);
+    ReplaceInnerTableElement(tableElementId, divWithDistanceAndSimilarity);
+}
+
+function DeleteImagesAndReloadPage() {
+    var isDeleteConfirmed = confirm("Do you want to delete all images? All changes will be lost!");
+    
+    if (!isDeleteConfirmed) return;
+
+    var deleteImagesRequest = new XMLHttpRequest();
+    deleteImagesRequest.open(
+        "DELETE", WEB_SERVICE_SERVER_URL + "images", false);
+    deleteImagesRequest.send();
+    console.log(deleteImagesRequest);
+
+    window.location.reload();
+    console.log('Page is reloaded');
+}
+
+function FillImagesTable() {
+    var getImageIdsRequest = new XMLHttpRequest();
+    getImageIdsRequest.open("GET", WEB_SERVICE_SERVER_URL + "images", false);
+    getImageIdsRequest.send();
+    console.log(getImageIdsRequest);
+
+    var jsonBody = JSON.parse(getImageIdsRequest.responseText);
+    var rowImageIds = jsonBody["row"];
+    var columnImageIds = jsonBody["column"];
+    var commonUrl = WEB_SERVICE_SERVER_URL + "images/";
+
+    for (var i = 0; i < rowImageIds.length; ++i) {
+        AddNewColumnWithElementsInTable(rowImageIds[i], commonUrl + rowImageIds[i]);
+    }
+    for (var i = 0; i < columnImageIds.length; ++i) {
+        AddNewRowWithElementsInTable(columnImageIds[i], commonUrl + columnImageIds[i]);
+    }
+}
+
+AddNewColumnInTable('main-table', [BuildRowAddImageButtonElement()]);
+AddNewRowInTable('main-table', [BuildColumnAddImageButtonElement()]);
+FillImagesTable()
+
+</script>
+
+<style>
+    .button-class {
+        margin: auto;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .row-table-element {
+        margin: auto;
+        width: 140px;
+        height: 190px;
+        border-color: #000;
+        border-width: 1px;
+        align-items: center;
+    }
+    .column-table-element {
+        margin: auto;
+        width: 190px;
+        height: 140px;
+        border-color: #000;
+        border-width: 1px;
+        align-items: center;
+    }
+    .inner-table-element {
+        margin: auto;
+        width: 140px;
+        height: 140px;
+        border-color: #000;
+        border-width: 1px;
+        align-items: center;
+    }
+    .uploaded-image-class {
+        margin: auto;
+        width: 120px;
+        height: 120px;
+        border-color: #000;
+        border-width: 1px;
+        align-items: center;
+    }
+    .add-new-row-image-class {
+        margin: 50px 50px 50px 50px;
+        width: 140px;
+        height: 190px;
+        text-align: center;
+        vertical-align: middle;
+    }
+    .new-image-row-button-class {
+        margin: 75px 40px;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .new-image-row-button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .new-image-column-button-class {
+        margin: 50px 65px;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .new-image-column-button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .inner-table-element-start-button-class {
+        margin: 50px 40px;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .inner-table-element-start-button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .inner-table-element-cancel-button-class {
+        margin: 50px 40px;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .inner-table-element-cancel-button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .inner-table-element-cancel-button-class {
+        margin: 20px 40px;
+        width: 60px;
+        height: 40px;
+        border-width: 0px;
+        background-color: rgb(245, 245, 245);
+        border-top-left-radius: 10px;
+        border-top-right-radius: 10px;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+    .inner-table-element-cancel-button-class:active {
+        transform: scale(0.98);
+        box-shadow: 3px 2px 22px 1px rgba(0, 0, 0, 0.24);
+    }
+    .progress-bar-holder-class {
+        width: 80%;
+        margin-left: 10%;
+        border: 1px solid black;
+    }
+    .progress-bar-background-class {
+        width: 100%;
+        background-color: #fff;
+    }
+    .progress-bar-finish-class {
+        width: 15%;
+        height: 20px;
+        background-color: rgb(45, 215, 15);
+    }
+    .distance-and-similarity-table-class {
+        margin: 0px 25px;
+        border-width: 0px;
+        text-align: center;
+    }
+    .tr-td-class {
+        text-align: center;
+        border: 1px solid black;
+        border-collapse: collapse;
+    }
+</style>
+</html>

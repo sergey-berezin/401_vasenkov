@@ -5,13 +5,14 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Concurrent;
 
 
-namespace arcface_async_vectorizer;
+namespace ArcfaceImageVectorizer;
 
 public class ImageVectorizer
 {
-    private static readonly string _ONNX_ARCFACE_MODEL_RESOUCE = "arcface_async_vectorizer.arcfaceresnet100-8.onnx";
+    private const string _ONNX_ARCFACE_MODEL_RESOUCE = "ArcfaceImageVectorizer.arcfaceresnet100-8.onnx";
 
     public ImageVectorizer() {
         using var modelStream = typeof(ImageVectorizer).Assembly.GetManifestResourceStream(_ONNX_ARCFACE_MODEL_RESOUCE);
@@ -21,8 +22,6 @@ public class ImageVectorizer
         var sessionOptions = new SessionOptions();
         sessionOptions.ExecutionMode = ExecutionMode.ORT_PARALLEL;
         this._inferenceSession = new InferenceSession(memoryStream.ToArray(), sessionOptions);
-        this._calculationsHolder = new Dictionary<string, Task<float[]>>();
-        this._calculationsHolderMutex = new Mutex();
     }
 
     ~ImageVectorizer()
@@ -30,11 +29,9 @@ public class ImageVectorizer
         this._inferenceSession.Dispose();
     }
 
-    public string StartCalculating(Image<Rgb24> image)
+    public Task<float[]> StartCalculating(Image<Rgb24> image, CancellationTokenSource cancellationToken = null)
     {
-        var sessionId = Guid.NewGuid().ToString();
-
-        Func<float[]> current_task = 
+        Func<float[]> currentTask = 
             () =>
             {
                 var input =
@@ -43,29 +40,11 @@ public class ImageVectorizer
                 return results.First(v => v.Name == "fc1").AsEnumerable<float>().ToArray();
             };
 
-        var task = Task<float[]>.Run(current_task);
-    
-        _calculationsHolderMutex.WaitOne();
-        _calculationsHolder[sessionId] = task;
-        _calculationsHolderMutex.ReleaseMutex();
-
-        return sessionId;
-    }
-
-    public float[] GetResultBySessionId(string sessionId)
-    {
-        _calculationsHolderMutex.WaitOne();
-        if (!_calculationsHolder.ContainsKey(sessionId))
+        if (cancellationToken is null)
         {
-            throw new exceptions.NotFound("No session id was found");
+            return Task<float[]>.Run(currentTask);
         }
-
-        var task = _calculationsHolder[sessionId];
-        
-        _calculationsHolder.Remove(sessionId);
-        _calculationsHolderMutex.ReleaseMutex();
-
-        return task.Result;
+        return Task<float[]>.Run(currentTask, cancellationToken.Token);
     }
 
     private static DenseTensor<float> ImageToTensor(Image<Rgb24> image)
@@ -92,6 +71,4 @@ public class ImageVectorizer
     }
 
     private InferenceSession _inferenceSession;
-    private Dictionary<string, Task<float[]>> _calculationsHolder;
-    private Mutex _calculationsHolderMutex;
 }
