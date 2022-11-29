@@ -3,7 +3,7 @@
 ## Использованные ресурсы:
 
 - [Node.js](https://nodejs.org/en/download/)
-- [npm](http://npmjs.com))
+- [npm](http://npmjs.com)
 - [python3](http://python.org)
 
 До начала работы необходимо установить указанные выше ресурсы
