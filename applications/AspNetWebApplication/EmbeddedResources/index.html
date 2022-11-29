@@ -21,8 +21,34 @@ const WEB_SERVICE_SERVER_URL = window.location.href
 const ADD_IMAGE_ICON_SRC = 'images/add-icon';
 const START_IMAGE_ICON_SRC = 'images/start-icon';
 const CANCEL_IMAGE_ICON_SRC = 'images/cancel-icon';
-const IMAGES_COMPARSION_POLLING_INTERVAL = 30;
+const IMAGES_COMPARSION_POLLING_INTERVAL = 30;  // ms
+const RETRY_COUNT = 3;
+const INITIAL_RETRY_TIMEOUT = 30;  // ms
+const MAX_RETRY = 250;  // ms
 
+
+function Sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function ExecuteRequestWithRetryPolicy(requestCaller) {
+    currentTimeout = INITIAL_RETRY_TIMEOUT;
+    for (var i = 0; i < RETRY_COUNT; ++i) {
+        try
+        {
+            var response = requestCaller();
+            return response;
+        } catch (err) {
+            console.log(err);
+            Sleep(currentTimeout);
+            currentTimeout *= 2;
+            if (currentTimeout > MAX_RETRY) {
+                currentTimeout = MAX_RETRY;
+            }
+        }
+    }
+    throw 'Server unavailable';
+}
 
 function BuildButtonInDiv(
     buttonId, buttonClass, onclick,
@@ -316,13 +342,27 @@ function PerformOperationForImageFromTableColumn(tableElementId, clickButtonCall
 }
 
 function SaveImagePost(image, table_element_type) {
+    var requestCaller = () => {
+        var saveImageRequest = new XMLHttpRequest();
+        saveImageRequest.open(
+            "POST", 
+            WEB_SERVICE_SERVER_URL + "images/save?table_element_type=" + table_element_type,
+            false
+        );
+        saveImageRequest.send(image);
+        return saveImageRequest;
+    }
+
     var saveImageRequest = new XMLHttpRequest();
-    saveImageRequest.open(
-        "POST", 
-        WEB_SERVICE_SERVER_URL + "images/save?table_element_type=" + table_element_type,
-        false
-    );
-    saveImageRequest.send(image);
+    
+    try {
+        saveImageRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return null;
+    }
+
     if (saveImageRequest.status != 200) {
         console.log(saveImageRequest)
         return null;
@@ -361,19 +401,33 @@ function AddNewColumnImage() {
 }
 
 function RequestStartCalculation(firstImageId, secondImageId) {
+    var requestCaller = () => {
+        var startCalculationRequest = new XMLHttpRequest();
+        startCalculationRequest.open(
+            "POST", WEB_SERVICE_SERVER_URL + "images/start_calculation", false);
+        startCalculationRequest.setRequestHeader("Accept", "application/json");
+        startCalculationRequest.setRequestHeader("Content-Type", "application/json");
+        startCalculationRequest.send(
+            JSON.stringify(
+                {
+                    "first_image_id": firstImageId,
+                    "second_image_id": secondImageId
+                }
+            )
+        );
+        return startCalculationRequest;
+    }
+
     var startCalculationRequest = new XMLHttpRequest();
-    startCalculationRequest.open(
-        "POST", WEB_SERVICE_SERVER_URL + "images/start_calculation", false);
-    startCalculationRequest.setRequestHeader("Accept", "application/json");
-    startCalculationRequest.setRequestHeader("Content-Type", "application/json");
-    startCalculationRequest.send(
-        JSON.stringify(
-            {
-                "first_image_id": firstImageId,
-                "second_image_id": secondImageId
-            }
-        )
-    );
+    
+    try {
+        startCalculationRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return null;
+    }
+
     if (startCalculationRequest.status != 200) {
         console.log(startCalculationRequest)
         return false;
@@ -385,19 +439,33 @@ function RequestStartCalculation(firstImageId, secondImageId) {
 }
 
 function RequestDistanceAndSimilarityWithProgress(firstImageId, secondImageId) {
+    var requestCaller = () => {
+        var getDistanceAndSimilarityRequest = new XMLHttpRequest();
+        getDistanceAndSimilarityRequest.open(
+            "POST", WEB_SERVICE_SERVER_URL + "images/compare", false);
+        getDistanceAndSimilarityRequest.setRequestHeader("Accept", "application/json");
+        getDistanceAndSimilarityRequest.setRequestHeader("Content-Type", "application/json");
+        getDistanceAndSimilarityRequest.send(
+            JSON.stringify(
+                {
+                    "first_image_id": firstImageId,
+                    "second_image_id": secondImageId
+                }
+            )
+        );
+        return getDistanceAndSimilarityRequest;
+    }
+
     var getDistanceAndSimilarityRequest = new XMLHttpRequest();
-    getDistanceAndSimilarityRequest.open(
-        "POST", WEB_SERVICE_SERVER_URL + "images/compare", false);
-    getDistanceAndSimilarityRequest.setRequestHeader("Accept", "application/json");
-    getDistanceAndSimilarityRequest.setRequestHeader("Content-Type", "application/json");
-    getDistanceAndSimilarityRequest.send(
-        JSON.stringify(
-            {
-                "first_image_id": firstImageId,
-                "second_image_id": secondImageId
-            }
-        )
-    );
+    
+    try {
+        getDistanceAndSimilarityRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return null;
+    }
+
     if (getDistanceAndSimilarityRequest.status != 200) {
         console.log(getDistanceAndSimilarityRequest)
         return null;
@@ -416,19 +484,33 @@ function ReplaceInnerTableElement(tdElementId, divElement) {
 }
 
 function CancelSingleCalculation(firstImageId, secondImageId) {
+    var requestCaller = () => {
+        var cancelCalculationRequest = new XMLHttpRequest();
+        cancelCalculationRequest.open(
+            "POST", WEB_SERVICE_SERVER_URL + "images/cancel_calculation", false);
+        cancelCalculationRequest.setRequestHeader("Accept", "application/json");
+        cancelCalculationRequest.setRequestHeader("Content-Type", "application/json");
+        cancelCalculationRequest.send(
+            JSON.stringify(
+                {
+                    "first_image_id": firstImageId,
+                    "second_image_id": secondImageId
+                }
+            )
+        );
+        return cancelCalculationRequest;
+    }
+
     var cancelCalculationRequest = new XMLHttpRequest();
-    cancelCalculationRequest.open(
-        "POST", WEB_SERVICE_SERVER_URL + "images/cancel_calculation", false);
-    cancelCalculationRequest.setRequestHeader("Accept", "application/json");
-    cancelCalculationRequest.setRequestHeader("Content-Type", "application/json");
-    cancelCalculationRequest.send(
-        JSON.stringify(
-            {
-                "first_image_id": firstImageId,
-                "second_image_id": secondImageId
-            }
-        )
-    );
+    
+    try {
+        cancelCalculationRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return;
+    }
+
     console.log(cancelCalculationRequest);
     var progressBarElement =
         document.getElementById(firstImageId + '-' + secondImageId);
@@ -483,10 +565,6 @@ function IsCancelledCalculation(progressBarId) {
     return dataCalculationCancelled == "true";
 }
 
-function Sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 async function FillDistanceAndSimilarityData(firstImageId, secondImageId, tableElementId) {
     if (!RequestStartCalculation(firstImageId, secondImageId)) {
         return;
@@ -532,10 +610,24 @@ function DeleteImagesAndReloadPage() {
     
     if (!isDeleteConfirmed) return;
 
+    var requestCaller = () => {
+        var deleteImagesRequest = new XMLHttpRequest();
+        deleteImagesRequest.open(
+            "DELETE", WEB_SERVICE_SERVER_URL + "images", false);
+        deleteImagesRequest.send();
+        return deleteImagesRequest;
+    }
+
     var deleteImagesRequest = new XMLHttpRequest();
-    deleteImagesRequest.open(
-        "DELETE", WEB_SERVICE_SERVER_URL + "images", false);
-    deleteImagesRequest.send();
+    
+    try {
+        deleteImagesRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return;
+    }
+    
     console.log(deleteImagesRequest);
 
     window.location.reload();
@@ -543,9 +635,23 @@ function DeleteImagesAndReloadPage() {
 }
 
 function FillImagesTable() {
+    var requestCaller = () => {
+        var getImageIdsRequest = new XMLHttpRequest();
+        getImageIdsRequest.open("GET", WEB_SERVICE_SERVER_URL + "images", false);
+        getImageIdsRequest.send();
+        return getImageIdsRequest;
+    }
+
     var getImageIdsRequest = new XMLHttpRequest();
-    getImageIdsRequest.open("GET", WEB_SERVICE_SERVER_URL + "images", false);
-    getImageIdsRequest.send();
+    
+    try {
+        getImageIdsRequest = ExecuteRequestWithRetryPolicy(requestCaller)
+    } catch (err) {
+        console.log(err);
+        alert(err);
+        return;
+    }
+
     console.log(getImageIdsRequest);
 
     var jsonBody = JSON.parse(getImageIdsRequest.responseText);

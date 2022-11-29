@@ -1,0 +1,12 @@
+{
+  "name": "desktop",
+  "version": "1.0.0",
+  "description": "desktop app for images processor",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^21.3.1"
+  }
+}
